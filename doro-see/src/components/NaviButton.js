@@ -2,7 +2,7 @@ import React from "react";
 import {useNavigate} from "react-router-dom";
 
 const NaviButton = ({label, start, goal, pathTo}) => {
-    const url = "http://192.168.0.146:8000";
+    const url = "http://localhost:8000";
     const navigate = useNavigate();
 
     const handleClick = async (event) => {

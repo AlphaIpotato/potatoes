@@ -3,7 +3,7 @@ import {Card, Table, Container, Row, Col, Dropdown} from "react-bootstrap";
 import {useLocation} from "react-router-dom";
 
 function AdminManage() {
-    const url = "http://192.168.0.146:8000";
+    const url = "http://localhost:8000";
     const location = useLocation();
     const receivedData = location.state?.fetchedData || [];
 

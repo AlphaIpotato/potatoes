@@ -3,7 +3,7 @@ import {useLocation} from "react-router-dom";
 import {MapContext} from './MapContext';
 
 function DamageMap() {
-    const url = "http://192.168.0.146:8000";
+    const url = "http://localhost:8000";
     if (!window.naver) return;
     const {naver} = window;
 
