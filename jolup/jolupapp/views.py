@@ -621,3 +621,18 @@ class NaverLocalSearch(APIView):
             return Response({"error": str(e)}, status=500)
 
 
+def gg_api_proxy(request):
+    service_name = request.GET.get("service", "")
+    if not service_name:
+        return JsonResponse({"error": "Service name required."}, status=400)
+
+    url = f"https://openapi.gg.go.kr/{service_name}"
+    params = {
+        "KEY": settings.GG_API_KEY,
+        "Type": "json",
+        "pIndex": 1,
+        "pSize": 10
+    }
+
+    response = requests.get(url, params=params)
+    return JsonResponse(response.json())
