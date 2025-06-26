@@ -38,14 +38,14 @@ const App = [
     },
 
     // user
-    {
-        path: "/user/info",
-        name: `회원이름`,
-        icon: "nc-icon nc-circle-09",
-        component: UserProfile,
-        layout: "/dorosee",
-        endpoint: `users/info/${user_id}/`
-    },
+    // {
+    //     path: "/user/info",
+    //     name: `회원이름`,
+    //     icon: "nc-icon nc-circle-09",
+    //     component: UserProfile,
+    //     layout: "/dorosee",
+    //     endpoint: `users/info/${user_id}/`
+    // },
 ];
 
 export default App;

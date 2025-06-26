@@ -47,7 +47,7 @@ function AdminManage() {
         const matchDamage = selectedDamageFilter === "전체" || road.roadreport_damagetype.includes(selectedDamageFilter);
         const matchState = selectedStateFilter === "전체" || road.roadreport_status.includes(selectedStateFilter);
         const excludeResolved = selectedStateFilter === "전체" ? road.roadreport_status !== "해결됨" : matchState;
-        return road.roadreport_image && excludeResolved && matchDamage && matchState;
+        return road.roadreport_image && (road.roadreport_count >= 3) && excludeResolved && matchDamage && matchState;
     });
 
     const totalPages = Math.ceil(appliedfilterData.length / perPage);
@@ -202,6 +202,18 @@ function AdminManage() {
             return [];
         }
     };
+
+
+    // 5초마다 데이터 갱신
+    useEffect(() => {
+        const interval = setInterval(async () => {
+            const updatedData = await fetchUpdatedData();
+            setRoadManage(updatedData);
+            console.log("데이터 갱신됨");
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, []);
 
 
     // 지도
