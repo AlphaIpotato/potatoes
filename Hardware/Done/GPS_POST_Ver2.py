@@ -33,9 +33,9 @@ current_ssid = get_current_ssid()
 if current_ssid == "JH_hotspot":
     django_server_url = "http://192.168.66.236:8000/hardware/pull/"  # 지훈씨 핫스팟
 elif current_ssid == "CCIT_2023_5G":
-    django_server_url = "http://localhost:8000/hardware/pull/"   # CCIT 와이파이
+    django_server_url = "http://192.168.0.146:8000/hardware/pull/"   # CCIT 와이파이
 elif current_ssid == "CCIT_2023":
-    django_server_url = "http://localhost:8000/hardware/pull/"   # CCIT 와이파이
+    django_server_url = "http://192.168.0.146:8000/hardware/pull/"   # CCIT 와이파이
 else:
     print("[ERROR] 네트워크에 연결되지 않았습니다. 10초 후 라즈베리파이를 재부팅합니다.")
     time.sleep(10)

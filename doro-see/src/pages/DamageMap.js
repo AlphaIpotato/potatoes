@@ -3,7 +3,7 @@ import {useLocation} from "react-router-dom";
 import {MapContext} from './MapContext';
 
 function DamageMap() {
-    const url = "http://localhost:8000";
+    const url = "http://192.168.0.146:8000";
     if (!window.naver) return;
     const {naver} = window;
 
@@ -12,6 +12,8 @@ function DamageMap() {
     const location = useLocation();
 
     const road_data = location.state?.fetchedData || [];
+    const sinkholeData = location.state?.ggData?.Tgrdsubsidinfo[1]?.row || [];
+
     const filteredData = road_data.filter(road => road.roadreport_image);
 
     useEffect(() => {
@@ -58,7 +60,47 @@ function DamageMap() {
             }
         });
 
+
+        const sinkholeAddress = sinkholeData.map(item =>
+            `${item.SIDO_NM} ${item.SIGNGU_NM} ${item.TGRD_SUBSID_REGION_DETAIL_INFO}`
+        );
+
+        console.log("sinkholeAddress", sinkholeAddress)
+
+        sinkholeAddress.forEach((address) => {
+            window.naver.maps.Service.geocode({query: address}, (status, response) => {
+                if (status !== window.naver.maps.Service.Status.OK) {
+                    console.warn("지오코딩 실패:", address);
+                    return;
+                }
+
+                const item = response.v2?.addresses?.[0];
+
+                console.log("item", item)
+
+                if (!item) {
+                    console.warn("주소 결과 없음:", address);
+                    return;
+                }
+
+                const lat = parseFloat(item.y);
+                const lng = parseFloat(item.x);
+
+                new naver.maps.Marker({
+                    position: new naver.maps.LatLng(lat, lng),
+                    map: map,
+                    icon: {
+                        url: "/media/icon_sinkhole.png",
+                        size: new naver.maps.Size(32, 32),
+                        origin: new naver.maps.Point(0, 0),
+                        anchor: new naver.maps.Point(16, 16)
+                    }
+                });
+            });
+        });
+
     }, [filteredData]);
+
     return (
         <>
             <MapContext.Provider value={true}>
