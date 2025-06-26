@@ -424,8 +424,8 @@ class HardwarePull(APIView):
                         continue
 
             # 3건까지는 저장 허용, 4건 이상이면 거부
-            if count >= 3:
-                return Response({"message": f"{target_class} 중복 3건 초과로 저장 차단"}, status=200)
+            #if count >= 3:
+                #return Response({"message": f"{target_class} 중복 3건 초과로 저장 차단"}, status=200)
 
             # DB 저장 (roadreport_count = count + 1)
             RoadReport.objects.create(
@@ -562,7 +562,7 @@ class NaverMapProxy(APIView):
             return Response({'error': 'start와 goal 파라미터가 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
         
-        url = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving"
+        url = "https://maps.apigw.ntruss.com/map-direction/v1/driving"
 
         headers = {
             'X-NCP-APIGW-API-KEY-ID': os.environ.get('NAVER_API_KEY_ID'),
@@ -621,3 +621,121 @@ class NaverLocalSearch(APIView):
             return Response({"error": str(e)}, status=500)
 
 
+def gg_api_proxy(request):
+    # 1) 서비스명 필수 파라미터
+    service_name = request.GET.get("service")
+    if not service_name:
+        return JsonResponse({"error": "Service name required."}, status=400)
+
+    # 2) 페이징 파라미터 (없으면 기본값)
+    p_index = request.GET.get("pIndex", 1)
+    p_size  = request.GET.get("pSize", 316)
+
+    # 3) 외부 API URL 및 파라미터 구성
+    url = f"https://openapi.gg.go.kr/{service_name}"
+    params = {
+        "KEY":    settings.GG_API_KEY,
+        "Type":   "json",
+        "pIndex": p_index,
+        "pSize":  p_size,
+    }
+
+    # 4) OpenAPI 호출
+    response = requests.get(url, params=params)
+    if response.status_code != 200:
+        return JsonResponse({
+            "error":  "경기도 OpenAPI 호출 실패",
+            "status": response.status_code
+        }, status=502)
+
+    data = response.json()
+    # ---------------------------------------------------
+    # 5) 추가 필터: 복구상태가 '복구중' 또는 '임시복구'인 것만 남기기
+    try:
+        # data[service_name] 은 [ {head}, {row: [...] } ]
+        head, row_container = data.get(service_name, [None, {}])
+        rows = row_container.get("row", [])
+
+        # 실제 필터링
+        filtered = [
+            r for r in rows
+            if r.get("RESTORE_STATE_NM") in ("복구중", "임시복구")
+        ]
+
+        # row 에 다시 할당
+        row_container["row"] = filtered
+        # 건수 정보 업데이트 (필요하다면)
+        if head and "LIST_TOTAL_COUNT" in head:
+            head["LIST_TOTAL_COUNT"] = len(filtered)
+
+        # 덮어쓰기
+        data[service_name] = [head, row_container]
+    except Exception:
+        # 필드 구조가 예상과 다를 경우 그냥 원본 반환
+        pass
+    # ---------------------------------------------------
+
+    # 6) 결과를 그대로 반환
+    return JsonResponse(data, safe=False)
+
+class NaverGeocode(APIView):
+    """
+    지오코딩(주소 → 좌표) API
+    GET 파라미터:
+      - query: 변환할 주소 문자열 (예: "서울시 강남구 역삼로 123")
+    """
+    def get(self, request, *args, **kwargs):
+        address = request.query_params.get("query")
+        if not address:
+            return Response({"error": "query 파라미터(required) 가 필요합니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        url = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
+        headers = {
+            "X-NCP-APIGW-API-KEY-ID": os.getenv("NAVER_API_KEY_ID"),
+            "X-NCP-APIGW-API-KEY":    os.getenv("NAVER_API_KEY"),
+        }
+        params = {
+            "query": address
+        }
+
+        try:
+            r = requests.get(url, headers=headers, params=params, timeout=5)
+            return Response(r.json(), status=r.status_code)
+        except requests.RequestException as e:
+            return Response({"error": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+class NaverReverseGeocode(APIView):
+    """
+    역지오코딩(좌표 → 주소) API
+    GET 파라미터:
+      - coords: "경도,위도" 포맷 문자열 (예: "127.02758,37.49794")
+      - orders: (선택) 반환 우선순위, 기본 "addr,admcode"
+      - output: (선택) 응답 형식, 기본 "json"
+    """
+    def get(self, request, *args, **kwargs):
+        coords = request.query_params.get("coords")
+        if not coords:
+            return Response({"error": "coords 파라미터(required) 가 필요합니다."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        orders = request.query_params.get("orders", "addr,admcode")
+        output = request.query_params.get("output", "json")
+
+        url = "https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc"
+        headers = {
+            "X-NCP-APIGW-API-KEY-ID": os.getenv("NAVER_API_KEY_ID"),
+            "X-NCP-APIGW-API-KEY":    os.getenv("NAVER_API_KEY"),
+        }
+        params = {
+            "coords": coords,
+            "orders": orders,
+            "output": output
+        }
+
+        try:
+            r = requests.get(url, headers=headers, params=params, timeout=5)
+            return Response(r.json(), status=r.status_code)
+        except requests.RequestException as e:
+            return Response({"error": str(e)}, status=status.HTTP_502_BAD_GATEWAY)

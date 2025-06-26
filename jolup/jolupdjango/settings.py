@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 pymysql.install_as_MySQLdb()  # pymysql 사용 시 추가
 load_dotenv()
 from corsheaders.defaults import default_headers
-
+GG_API_KEY = os.getenv("GG_API_KEY")
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -71,11 +71,14 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = False 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # React 개발 서버 주소
-    "http://127.0.0.1:8000",
-    "url",
+    "http://192.168.0.144:3000",
+    "http://192.168.66.236:3000",
     "http://192.168.0.162:3000",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
     "https://615d-14-42-86-124.ngrok-free.app",
-    "https://naveropenapi.apigw.ntruss.com"  
+    "https://naveropenapi.apigw.ntruss.com",
+    "http://192.168.66.236:8000",      
     
 ]
 CORS_ALLOW_HEADERS = list(default_headers) + [

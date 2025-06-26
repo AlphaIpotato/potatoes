@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     MasterSignUp, MasterLogin, UserSignUp, UserLogin, UserSignOut, UserInfo,RoadReportSelectWithCoords,
     RoadReportAll, RoadReportSelect, HardwarePull, AiPull, RoadReportDelete, RoadReportEdit, UsersViewSet, MasterViewSet, UserHistoryViewSet, RoadReportViewSet,
-    NaverMapProxy,RoadReportCreate,NaverLocalSearch,UserUpdate,UserPasswordChange
+    NaverMapProxy,RoadReportCreate,NaverLocalSearch,UserUpdate,UserPasswordChange,gg_api_proxy,NaverGeocode, NaverReverseGeocode
 )
 from . import views
 # Router 설정
@@ -49,4 +49,8 @@ urlpatterns = [
     #path('driving/', NaverMapProxy.as_view(),name='naver_map_proxy')
     # 도로 보고 이미지 업로드 API
     path("roadreport/create", RoadReportCreate.as_view()),
+    path("ggdata", gg_api_proxy),
+    #naver geo ,역geo
+    path('naver/geocode/',       NaverGeocode.as_view(),         name='naver-geocode'),
+    path('naver/reverse-geocode/', NaverReverseGeocode.as_view(),  name='naver-reverse-geocode'),
 ]
