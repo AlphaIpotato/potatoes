@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     MasterSignUp, MasterLogin, UserSignUp, UserLogin, UserSignOut, UserInfo,RoadReportSelectWithCoords,
     RoadReportAll, RoadReportSelect, HardwarePull, AiPull, RoadReportDelete, RoadReportEdit, UsersViewSet, MasterViewSet, UserHistoryViewSet, RoadReportViewSet,
-    NaverMapProxy,RoadReportCreate,NaverLocalSearch,UserUpdate,UserPasswordChange,gg_api_proxy,NaverGeocode, NaverReverseGeocode
+    NaverMapProxy,RoadReportCreate,NaverLocalSearch,UserUpdate,UserPasswordChange,gg_api_proxy,NaverGeocode, NaverReverseGeocode,subsidence_info_proxy,
+    subsidence_list_proxy,GeocacheStatsExport,VWorldGeocode,gg_api_geocoded_proxy, GGSubsidenceListView, SubsidenceCoordListView ,SubsidenceCoordListView,GGSubsidenceView
 )
 from . import views
 # Router 설정
@@ -46,6 +47,7 @@ urlpatterns = [
     #naver 지도 api
     path('naver/proxy/', NaverMapProxy.as_view(), name='naver_map_proxy'),
     path('naver/search/', NaverLocalSearch.as_view(), name='naver-local-search'),
+    path('vworld/geocode/<str:address>/', VWorldGeocode, name='vworld-geocode'),
     #path('driving/', NaverMapProxy.as_view(),name='naver_map_proxy')
     # 도로 보고 이미지 업로드 API
     path("roadreport/create", RoadReportCreate.as_view()),
@@ -53,4 +55,21 @@ urlpatterns = [
     #naver geo ,역geo
     path('naver/geocode/',       NaverGeocode.as_view(),         name='naver-geocode'),
     path('naver/reverse-geocode/', NaverReverseGeocode.as_view(),  name='naver-reverse-geocode'),
+    #공공데이터(국토부)
+    path("api/subsidence/", subsidence_info_proxy),
+    path("api/subsidence_list/", subsidence_list_proxy), #단일로 가능
+    #path("api/subsidence_detail/", subsidence_detail_address),
+    path("ggdata", gg_api_proxy),
+    #통계 데이터
+    path("api/export_stats/", GeocacheStatsExport.as_view(), name="export_stats"),
+    #경기도 데이터+ 지오코드
+    path("api/subsidence_with_coords/", gg_api_geocoded_proxy, name="subsidence-with-coords"),
+    # 지반침하 데이터 전체 조회 API
+    #path("api/subsidence-reports/", SubsidenceReportListView.as_view(), name="subsidence-report-list"),
+    path('api/subsidence/coords/',SubsidenceCoordListView.as_view(),name='subsidence-coords'),  # 지도 마커용 좌표만 제공하는 엔드포인트
+    # 경기도 지반침하 좌표 리스트 API (필터/페이지네이션 지원)
+
+    path("gg/subsidence/", GGSubsidenceView.as_view(), name="gg_subsidence_list"),
+
+    
 ]

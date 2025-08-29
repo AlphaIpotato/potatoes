@@ -1,21 +1,26 @@
 import cv2
 from django.shortcuts import render
 from django.http import StreamingHttpResponse
-import time
-import os
+import os, requests, xmltodict
+import ssl
+from requests.adapters import HTTPAdapter
+from urllib3.poolmanager import PoolManager
 # Create your views here.
-from .serializers import UsersSerializer, MasterSerializer, UserHistorySerializer, RoadReportSerializer
+from .serializers import (
+    UsersSerializer, MasterSerializer, UserHistorySerializer, RoadReportSerializer,
+    SubsidenceReportSerializer
+)
 from django.contrib.auth.hashers import make_password, check_password
+from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, viewsets
 from django.shortcuts import get_object_or_404
 from django.core.files.storage import default_storage
-from .models import Users, Master, UserHistory, RoadReport
+from .models import Users, Master, UserHistory, RoadReport, SubsidenceReport, GGSubsidenceReport
 from django.http import JsonResponse
 import pytz
 from datetime import datetime
-import requests
 from django.conf import settings
 import torch
 import numpy as np
@@ -23,11 +28,21 @@ from pathlib import Path
 from ultralytics import YOLO
 from functools import lru_cache
 from math import radians, cos, sin, asin, sqrt
+import xml.etree.ElementTree as ET
+from dotenv import load_dotenv
+from urllib.parse import unquote, urlencode
+from django.db import connection
+import pandas as pd
+import time
+from django.core.exceptions import ValidationError
+from django.utils.crypto import constant_time_compare
+import logging
 import pathlib #이 세줄이 욜로 리눅스 문제일때때
 temp = pathlib.PosixPath 
 pathlib.PosixPath = pathlib.WindowsPath
 
 
+load_dotenv()  # .env 파일에서 환경변수 로드
 def index(request):  # 임시 메인페이지 출력문
     return JsonResponse({"message": "Django 서버가 정상적으로 동작 중입니다."})
 
@@ -69,18 +84,28 @@ class MasterSignUp(APIView):
 
 # 관리자 로그인 API
 class MasterLogin(APIView):
-    def post(self, request):
-        master_id = request.data.get('master_id')
-        master_pw = request.data.get('master_pw')
+    # JSON / form-urlencoded / multipart 모두 허용
+    parser_classes = (JSONParser, FormParser, MultiPartParser)
 
-        try:
-            master = Master.objects.get(master_id=master_id)
-            if check_password(master_pw, master.master_pw):
-                return Response({'message': '관리자 로그인 성공'}, status=status.HTTP_200_OK)
-            else:
-                return Response({'error': '비밀번호가 틀렸습니다.'}, status=status.HTTP_401_UNAUTHORIZED)
-        except Master.DoesNotExist:
-            return Response({'error': '관리자 계정이 존재하지 않습니다.'}, status=status.HTTP_404_NOT_FOUND)
+    def post(self, request):
+        master_id = (request.data.get('master_id') or '').strip()
+        master_pw = (request.data.get('master_pw') or '').strip()
+
+        if not master_id or not master_pw:
+            return Response({'error': 'master_id와 master_pw는 필수입니다.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        master = Master.objects.filter(master_id=master_id).first()
+        if not master:
+            return Response({'error': '관리자 계정이 존재하지 않습니다.'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        if not check_password(master_pw, master.master_pw):
+            return Response({'error': '비밀번호가 틀렸습니다.'},
+                            status=status.HTTP_401_UNAUTHORIZED)
+
+        # TODO: JWT/세션 발급
+        return Response({'message': '관리자 로그인 성공'}, status=status.HTTP_200_OK)
 
 
 # 사용자 회원가입 API
@@ -92,22 +117,37 @@ class UserSignUp(APIView):
             return Response({'message': '회원가입 성공'}, status=status.HTTP_201_CREATED)
         return Response({'error': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-
+logger = logging.getLogger(__name__)
 # 사용자 로그인 API
 class UserLogin(APIView):
-    def get(self, request):
-        user_id = request.data.get('user_id')
-        user_pw = request.data.get('user_pw')
+    # JSON / form-urlencoded / multipart 모두 허용 (프론트 타입 불일치 대비)
+    parser_classes = (JSONParser, FormParser, MultiPartParser)
 
-        try:
-            user = Users.objects.get(user_id=user_id)
-            if check_password(user_pw, user.user_pw):
-                return Response({'message': '사용자 로그인 성공'}, status=status.HTTP_200_OK)
-            else:
-                return Response({'error': '비밀번호가 틀렸습니다.'}, status=status.HTTP_401_UNAUTHORIZED)
-        except Users.DoesNotExist:
-            return Response({'error': '사용자 계정이 존재하지 않습니다.'}, status=status.HTTP_404_NOT_FOUND)
+    def post(self, request):
+        user_id = (request.data.get('user_id') or '').strip()
+        user_pw = (request.data.get('user_pw') or '').strip()
 
+        if not user_id or not user_pw:
+            return Response({'error': 'user_id와 user_pw는 필수입니다.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = Users.objects.filter(user_id=user_id).first()
+        if not user:
+            logger.info(f"[LOGIN] user not found user_id={user_id}")
+            return Response({'error': '사용자 계정이 존재하지 않습니다.'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        # 비밀번호 검증
+        if not check_password(user_pw, user.user_pw):
+            logger.info(
+                f"[LOGIN] password mismatch user_id={user_id} "
+                f"ctype={request.content_type}"
+            )
+            return Response({'error': '비밀번호가 틀렸습니다.'},
+                            status=status.HTTP_401_UNAUTHORIZED)
+
+        # TODO: 필요시 JWT/세션 발급 추가
+        return Response({'message': '사용자 로그인 성공'}, status=status.HTTP_200_OK)
 
 # 사용자 로그아웃 API
 class UserSignOut(APIView):
@@ -332,7 +372,7 @@ class HardwarePull(APIView):
     def post(self, request):
         try:
             print("[INFO] 요청 수신됨. 모델 로드 시작.")
-            model = YOLO("C:/Users/ysyhs/Desktop/jolup/models/yoloV8v4.pt")
+            model = YOLO("C:/Users/ysyhs/Desktop/jolup/models/yoloV8v5.pt")
             print("[INFO] 모델 로딩 완료.")
 
             # 시간 및 파일 경로 설정
@@ -445,7 +485,6 @@ class HardwarePull(APIView):
             print(f"[ERROR] 예외 발생: {str(e)}")
             return Response({"error": f"오류 발생: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-   
 
 def object_detection_stream(request):
     stream_url = "http://192.168.0.135:8081/"
@@ -739,3 +778,624 @@ class NaverReverseGeocode(APIView):
             return Response(r.json(), status=r.status_code)
         except requests.RequestException as e:
             return Response({"error": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+
+def subsidence_info_proxy(request):
+    sagoNo = request.GET.get("sagoNo")
+    if not sagoNo:
+        return JsonResponse({"results": []}, status=200)
+
+    url     = "https://apis.data.go.kr/1611000/undergroundsafetyinfo/getSubsidenceInfo"
+    api_key = os.getenv("UNDERSAFETY_API_KEY", "")
+    params  = {
+        "serviceKey": api_key,
+        "sagoNo":     sagoNo,
+        "numOfRows":  request.GET.get("numOfRows", 10),
+        "pageNo":     request.GET.get("pageNo",    1),
+        "type":       "json",
+    }
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    # 1) 호출
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=10, verify=False)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        # 실패해도 빈 리스트
+        return JsonResponse({"results": []}, status=200)
+
+    # 2) JSON / XML 둘 다 커버
+    items = []
+    # JSON 포맷일 때
+    body = data.get("response", {}).get("body", {})
+    raw = body.get("items", {}).get("item")
+    if raw:
+        if isinstance(raw, list):
+            items = raw
+        else:
+            items = [raw]
+    else:
+        # XML 파싱 fallback
+        root = ET.fromstring(resp.content)
+        xml_items = root.findall(".//item")
+        for el in xml_items:
+            item = { 
+                "sagoNo":     el.findtext("sagoNo"),
+                "sido":       el.findtext("sido"),
+                "siGunGu":    el.findtext("sgg"),     # xml 샘플은 <sgg>
+                "dong":       el.findtext("dong"),
+                "addr":       el.findtext("addr"),
+                "sagoDate":   el.findtext("sagoDate"),
+                "sagoLat":    el.findtext("sagoLat"),
+                "sagoLon":    el.findtext("sagoLon"),
+                "sinkWidth":  el.findtext("sinkWidth"),
+                "sinkDepth":  el.findtext("sinkDepth"),
+                "sinkExtend": el.findtext("sinkExtend"),
+                "gridX":      el.findtext("gridX"),
+                "gridY":      el.findtext("gridY"),
+                "sagoDetail": el.findtext("sagoDetail"),
+                "deathCnt":   el.findtext("deathCnt"),
+                "injurCnt":   el.findtext("injuryCnt"),  # xml 샘플은 <injuryCnt>
+                "vehicleCnt": el.findtext("vehicleCnt"),
+                "trfStatus":  el.findtext("trfStatus"),
+                "trMethod":   el.findtext("trMethod"),
+                "trAmt":      el.findtext("trAmt"),
+                "trFinDate":  el.findtext("trFinDate"),
+                "dsdDate":    el.findtext("dsdDate"),
+                "no":         el.findtext("no"),
+            }
+            items.append(item)
+
+    # 3) 타입 정제 & 필터링
+    results = []
+    for i in items:
+        # 필수: trfStatus, 좌표
+        if i.get("trfStatus") == "복구완료":
+            continue
+        lat = i.get("sagoLat")
+        lon = i.get("sagoLon")
+        if not lat or not lon:
+            continue
+
+        # 숫자 변환 시도
+        try:
+            i["sagoLat"]   = float(lat)
+            i["sagoLon"]   = float(lon)
+            i["sinkWidth"] = float(i.get("sinkWidth") or 0)
+            i["sinkDepth"] = float(i.get("sinkDepth") or 0)
+            i["sinkExtend"]= float(i.get("sinkExtend") or 0)
+            i["deathCnt"]  = int(i.get("deathCnt") or 0)
+            i["injurCnt"]  = int(i.get("injurCnt") or 0)
+            i["vehicleCnt"]= int(i.get("vehicleCnt") or 0)
+        except ValueError:
+            # 변환 실패해도 넘어감
+            pass
+
+        results.append(i)
+
+    return JsonResponse({"results": results}, json_dumps_params={'ensure_ascii': False}, status=200)
+
+"""
+# 1. API 기본 설정
+BASE = "http://apis.data.go.kr/1611000/undergroundsafetyinfo"
+API_KEY = os.getenv("UNDERSAFETY_API_KEY", "")  # 디코딩 없이 그대로 사용
+
+# 2. 페이지 단위 데이터 수집 함수
+def fetch_one_page_xml(page: int, rows: int = 100):
+    #2024년 지반침하 정보, 페이지 단위 XML 파싱
+    base_url = f"{BASE}/getSubsidenceList?serviceKey={API_KEY}"
+    query = urlencode({
+        "sagoDateFrom": "20250101",
+        "sagoDateTo":   "20251231",
+        "numOfRows":    rows,
+        "pageNo":       page,
+    }, safe="%")
+
+    url = f"{base_url}&{query}"
+    print(f"[INFO] 요청 URL: {url}")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"  # User-Agent 없으면 오류날 수 있음
+    }
+
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        print("[DEBUG] 응답 상태코드:", res.status_code)
+        print("[DEBUG] 응답 본문 (앞부분):", res.text[:300])
+        res.raise_for_status()
+    except Exception as e:
+        print(f"[ERROR] 요청 실패: {e}")
+        return []
+
+    try:
+        data = xmltodict.parse(res.text)
+    except Exception as e:
+        print(f"[ERROR] XML 파싱 실패: {e}")
+        return []
+
+    # ✅ <resonse> 오타 대응
+    response_data = data.get("response") or data.get("resonse") or {}
+    header = response_data.get("header", {})
+    print("[DEBUG] Header 내용:", header)
+
+    result_code = header.get("resultCode", "")
+    if result_code not in ("00", "0"):  # 공공데이터포털은 "0"도 성공 처리함
+        print(f"[ERROR] API 호출 실패 - 코드: {result_code}")
+        return []
+
+    items_raw = response_data.get("body", {}).get("items", None)
+    if not items_raw:
+        print("[INFO] 데이터 없음")
+        return []
+
+    item_data = items_raw.get("item", [])
+    if isinstance(item_data, dict):
+        item_data = [item_data]
+
+    return item_data
+
+# 3. 전체 수집 API 뷰
+def subsidence_list_proxy(request):
+    #2024년 전체 지반침하 사고 리스트 반환
+    all_items = []
+    try:
+        page = 1
+        while True:
+            items = fetch_one_page_xml(page)
+            if not items:
+                break
+            all_items.extend(items)
+            page += 1
+    except Exception as e:
+        print("[ERROR] getSubsidenceList XML 호출 실패:", repr(e))
+
+    return JsonResponse(
+        {"year": 2025, "count": len(all_items), "results": all_items},
+        json_dumps_params={"ensure_ascii": False},
+        status=200,
+    )
+
+
+def subsidence_detail_address(request):
+    #지반침하 상세 주소 정보 조회 (sagoNo 기준)
+    sagoNo = request.GET.get("sagoNo")
+    if not sagoNo:
+        return JsonResponse({"error": "sagoNo 파라미터가 필요합니다."}, status=400)
+
+    url = f"{BASE}/getSubsidenceInfo"
+    params = {
+        "serviceKey": API_KEY,
+        "sagoNo": sagoNo,
+    }
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    try:
+        res = requests.get(url, params=params, headers=headers, timeout=10)
+        res.raise_for_status()
+        data = xmltodict.parse(res.text)
+    except Exception as e:
+        return JsonResponse({"error": f"API 호출 실패: {e}"}, status=500)
+
+    # resonse 오타 대응
+    response_data = data.get("resonse") or data.get("response") or {}
+    item = (
+        response_data.get("body", {})
+        .get("item", {})
+    )
+
+    if not item:
+        return JsonResponse({"error": "해당 sagoNo에 대한 상세 정보 없음"}, status=404)
+
+    # 주소 관련 필드만 추출해서 반환
+    result = {
+        "sagoNo": item.get("sagoNo"),
+        "sido": item.get("sido"),
+        "sigungu": item.get("sigungu") or item.get("siGunGu"),
+        "dong": item.get("dong"),
+        "addr": item.get("addr"),
+    }
+
+    return JsonResponse(result, json_dumps_params={"ensure_ascii": False}, status=200)
+"""
+
+
+# ── API 설정 ────────────────────────
+API_KEY = os.getenv("UNDERSAFETY_API_KEY", "")  # 디코딩하지 않음
+BASE = "http://apis.data.go.kr/1611000/undergroundsafetyinfo"
+UA_HEADER = {"User-Agent": "Mozilla/5.0"}
+
+# ── 상세조회 함수 ─────────────────────
+def get_subsidence_detail_by_sago(sago_no: str) -> dict:
+    url = (
+        f"{BASE}/getSubsidenceInfo"
+        f"?serviceKey={API_KEY}"
+        f"&sagoNo={sago_no}"
+    )
+    try:
+        res = requests.get(url, headers=UA_HEADER, timeout=5)
+        res.raise_for_status()
+
+        #print(f"[DETAIL-URL] {res.url}")
+        #print(f"[DETAIL-XML] {res.text[:300]}")
+
+        data = xmltodict.parse(res.text)
+        resp = (
+            data.get("response")
+            or data.get("resonse")
+            or data.get("OpenAPI_ServiceResponse", {})
+        ).get("body", {})
+
+        item = resp.get("items", {}).get("item", {}) or resp.get("item", {})
+        if isinstance(item, dict):
+            return {
+                "dong": item.get("dong"),
+                "addr": item.get("addr")
+            }
+        return {}
+    except Exception as e:
+        #print(f"[ERROR] 상세조회 실패 ({sago_no}): {e}")
+        return {}
+
+# ── 1페이지 조회 함수 ─────────────────────
+def fetch_one_page_xml(page: int, rows: int = 100):
+    query = urlencode({
+        "sagoDateFrom": "20250101",
+        "sagoDateTo":   "20251231",
+        "numOfRows":    rows,
+        "pageNo":       page,
+    }, safe="%")
+    url = f"{BASE}/getSubsidenceList?serviceKey={API_KEY}&{query}"
+
+    try:
+        res = requests.get(url, headers=UA_HEADER, timeout=10)
+        res.raise_for_status()
+        data = xmltodict.parse(res.text)
+        #print(f"[LIST-URL] {url}")
+        #print(f"[LIST-XML] {res.text[:300]}")
+    except Exception as e:
+        #print(f"[ERROR] 리스트 조회 실패: {e}")
+        return []
+
+    resp = data.get("response") or data.get("resonse") or {}
+    if resp.get("header", {}).get("resultCode") not in ("0", "00"):
+        return []
+
+    items = resp.get("body", {}).get("items", {}).get("item", [])
+    return [items] if isinstance(items, dict) else items
+
+# ── 최종 통합 API 뷰 함수 ────────────────
+def subsidence_list_proxy(request):
+    all_items = []
+    page = 1
+
+    try:
+        while True:
+            items = fetch_one_page_xml(page)
+            if not items:
+                break
+
+            for item in items:
+                if item.get("trStatus") == "복구완료":
+                    continue
+
+                sago_no = item.get("sagoNo")
+                if sago_no:
+                    detail = get_subsidence_detail_by_sago(sago_no)
+                    item["dong"] = detail.get("dong")
+                    item["addr"] = detail.get("addr")
+                all_items.append(item)
+
+            page += 1
+    except Exception as e:
+        print(f"[ERROR] 전체 조회 실패: {e}")
+
+    return JsonResponse(
+        {"year": 2025, "count": len(all_items), "results": all_items},
+        json_dumps_params={"ensure_ascii": False},
+        status=200,
+    )
+
+
+class GeocacheStatsExport(APIView):
+    """
+    도로 파손 통계를 광역 및 기초자치단체 기준으로 정리한 엑셀 파일 생성 API
+    """
+
+    def get(self, request):
+        try:
+            # DB에서 geocache 테이블 데이터 가져오기
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT geocache_address, geocache_damagetype, geocache_count
+                    FROM geocache
+                """)
+                rows = cursor.fetchall()
+                columns = [col[0] for col in cursor.description]
+
+            # Pandas DataFrame 변환
+            df = pd.DataFrame(rows, columns=columns)
+            df["광역"] = df["geocache_address"].str.extract(r'(.*?[도시])')
+            df["기초"] = df["geocache_address"].str.extract(r'[도시]\s+(\S+?[구군시])')
+
+            # 통계 계산
+            wide = df.groupby(["광역", "geocache_damagetype"])["geocache_count"].sum().unstack(fill_value=0).reset_index()
+            basic = df.groupby(["광역", "기초", "geocache_damagetype"])["geocache_count"].sum().unstack(fill_value=0).reset_index()
+
+            # 저장 경로 설정
+            save_dir = "media"
+            os.makedirs(save_dir, exist_ok=True)
+            save_path = os.path.join(save_dir, "도로파손통계.xlsx")
+
+            # 엑셀 저장
+            with pd.ExcelWriter(save_path) as writer:
+                wide.to_excel(writer, index=False, sheet_name="광역 통계")
+                basic.to_excel(writer, index=False, sheet_name="기초 통계")
+
+            return Response(
+                {"message": "통계 파일이 생성되었습니다.", "download_url": f"/media/도로파손통계.xlsx"},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+#이게 지오코드 실제 쓰는거
+def VWorldGeocode(request, address):
+    if not address:
+        return JsonResponse({'error': '주소 파라미터가 필요합니다.'}, status=400)
+
+    api_key = settings.VWORLD_API_KEY
+    url = 'https://api.vworld.kr/req/address'
+
+    params = {
+        'service': 'address',
+        'request': 'getCoord',
+        'type': 'PARCEL',           # ← 지번주소 지정
+        'crs': 'EPSG:4326',         # ← WGS84 기본좌표계
+        'format': 'json',
+        'key': api_key,
+        'address': address,
+    }
+
+    try:
+        res = requests.get(url, params=params, timeout=5)
+        res.raise_for_status()
+        data = res.json()
+        point = data.get('response', {}).get('result', {}).get('point')
+        if not point:
+            return JsonResponse({'error': '좌표를 찾을 수 없습니다.'}, status=404)
+        return JsonResponse({
+            'address': address,
+            'longitude': point['x'],
+            'latitude': point['y']
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def geocode_address_backend(addr):
+    url = 'https://api.vworld.kr/req/address'
+    params = {
+        'service': 'address',
+        'request': 'getCoord',
+        'format': 'json',
+        'key': settings.VWORLD_API_KEY,
+        'address': addr,
+        'type': 'parcel',  # 'ANY'가 아닌 'parcel' (지번주소)로 수정
+        'crs': 'EPSG:4326',
+    }
+    try:
+        res = requests.get(url, params=params, timeout=3)
+        res.raise_for_status()
+        data = res.json()
+        
+        # VWorld API 응답에서 상태 확인
+        if data.get('response', {}).get('status') != 'OK':
+            error_msg = data.get('response', {}).get('error', {}).get('text', '알 수 없는 오류')
+            print(f" [API 오류] {error_msg} (주소: {addr})")
+            return None, None
+
+        point = data.get("response", {}).get("result", {}).get("point")
+        if point:
+            return point.get("y"), point.get("x")  # 위도, 경도
+    except requests.exceptions.RequestException as e:
+        print(f" [요청 오류] {e}")
+    except Exception as e:
+        print(f" [기타 오류] {e}")
+        
+    return None, None
+
+def gg_api_geocoded_proxy(request):
+    # 1) 필수 파라미터
+    service_name = request.GET.get("service")
+    if not service_name:
+        return JsonResponse({"error": "Service name required."}, status=400)
+
+    # 2) 페이징 파라미터
+    p_index = request.GET.get("pIndex", 1)
+    p_size = request.GET.get("pSize", 316)
+
+    # 3) API 호출
+    url = f"https://openapi.gg.go.kr/{service_name}"
+    params = {
+        "KEY": settings.GG_API_KEY,
+        "Type": "json",
+        "pIndex": p_index,
+        "pSize": p_size,
+    }
+
+    response = requests.get(url, params=params)
+    if response.status_code != 200:
+        return JsonResponse({
+            "error": "경기도 OpenAPI 호출 실패",
+            "status": response.status_code
+        }, status=502)
+
+    data = response.json()
+
+    try:
+        head, row_container = data.get(service_name, [None, {}])
+        rows = row_container.get("row", [])
+
+        filtered = [
+            r for r in rows
+            if r.get("RESTORE_STATE_NM") in ("복구중", "임시복구")
+        ]
+
+        # ⛳ 주소 기반 좌표 추가
+        for r in filtered:
+            addr = r.get("ADDR") or r.get("REFINE_LOTNO_ADDR") or ""
+            if addr:
+                lat, lon = geocode_address_backend(addr)
+                r["latitude"] = lat
+                r["longitude"] = lon
+                time.sleep(0.1)  # VWorld 제한 회피용 (초당 3건 제한)
+
+        # row 재할당 및 건수 수정
+        row_container["row"] = filtered
+        if head and "LIST_TOTAL_COUNT" in head:
+            head["LIST_TOTAL_COUNT"] = len(filtered)
+        data[service_name] = [head, row_container]
+    except Exception:
+        pass  # 구조 다르면 그냥 원본
+
+    return JsonResponse(data, safe=False)
+
+"""
+# SubsidenceReport (지반침하) 전체 조회 API
+class SubsidenceReportListView(APIView):
+    def get(self, request):
+        # 위도(latitude)와 경도(longitude)가 null이 아닌 데이터만 필터링
+        reports = SubsidenceReport.objects.filter(
+            latitude__isnull=False,
+            longitude__isnull=False
+        )
+        serializer = SubsidenceReportSerializer(reports, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+"""
+class SubsidenceCoordListView(APIView):
+    def get(self, request):
+        # 위도/경도 NULL 제외 + 0값 제외
+        qs = (
+            SubsidenceReport.objects
+            .filter(latitude__isnull=False, longitude__isnull=False)
+            .exclude(latitude=0).exclude(longitude=0)
+            .values(
+                "sido",       # 시도
+                "sigungu",    # 시군구
+                "sagoDetail", # 사고 상세
+                "sagoDate",   # 사고 날짜
+                "dong",       # 동
+                "addr",       # 주소
+                "latitude",   # 위도
+                "longitude"   # 경도
+            )
+            .distinct()
+        )
+
+        data = list(qs)
+        return Response(data, status=status.HTTP_200_OK)
+
+class GGSubsidenceListView(APIView):
+    """
+    경기도 지반침하 리스트 (필드 최소화)
+    반환: sido, sigungu, sagoDetail, addr, sagoDate, latitude, longitude (+ lat/lng 별칭)
+    """
+    DEFAULT_LIMIT = 500
+
+    def get(self, request):
+        qs = GGSubsidenceReport.objects.all()
+
+        # --- 필터 ---
+        sido = request.GET.get("sido")
+        sigungu = request.GET.get("sigungu")
+        has_coords = (request.GET.get("has_coords") or "").lower() in ("1", "true", "yes")
+
+        if sido:
+            qs = qs.filter(sido=sido)
+        if sigungu:
+            qs = qs.filter(sigungu=sigungu)
+
+        if has_coords:
+            qs = qs.filter(
+                latitude__isnull=False,
+                longitude__isnull=False,
+            ).exclude(
+                latitude__in=["", "0", 0, 0.0]
+            ).exclude(
+                longitude__in=["", "0", 0, 0.0]
+            )
+
+        # --- 페이지네이션 ---
+        try:
+            limit = int(request.GET.get("limit", self.DEFAULT_LIMIT))
+            offset = int(request.GET.get("offset", 0))
+        except ValueError:
+            return JsonResponse({"error": "limit/offset must be integers"}, status=400)
+
+        if limit <= 0 or limit > 2000:
+            limit = self.DEFAULT_LIMIT
+        if offset < 0:
+            offset = 0
+
+        total = qs.count()
+
+        # 필요한 필드만 select
+        rows = (
+            qs.order_by("-sagoDate")
+              .values("sido", "sigungu", "sagoDetail", "addr", "sagoDate", "latitude", "longitude")[offset:offset + limit]
+        )
+
+        results = []
+        for r in rows:
+            lat_raw = r.get("latitude")
+            lng_raw = r.get("longitude")
+            lat = float(lat_raw) if lat_raw not in (None, "", "0") else None
+            lng = float(lng_raw) if lng_raw not in (None, "", "0") else None
+
+            results.append({
+                "sido": r.get("sido"),
+                "sigungu": r.get("sigungu"),
+                "sagoDetail": r.get("sagoDetail"),
+                "addr": r.get("addr"),
+                "sagoDate": r.get("sagoDate"),
+                "latitude": lat,
+                "longitude": lng,
+                "lat": lat,   # 별칭
+                "lng": lng,   # 별칭
+            })
+
+        return JsonResponse({
+            "count": total,
+            "limit": limit,
+            "offset": offset,
+            "results": results,
+        }, status=200)
+    
+
+
+class GGSubsidenceView(APIView):
+    def get(self, request):
+        qs = GGSubsidenceReport.objects.all()
+
+        rows = qs.order_by("-sagoDate").values(
+            "sido", "sigungu", "sagoDetail", "addr", "sagoDate", "latitude", "longitude"
+        )[:500]
+
+        data = []
+        for r in rows:
+            lat = float(r["latitude"]) if r["latitude"] else None
+            lng = float(r["longitude"]) if r["longitude"] else None
+            data.append({
+                "sido": r["sido"],
+                "sigungu": r["sigungu"],
+                "sagoDetail": r["sagoDetail"],
+                "addr": r["addr"],
+                "sagoDate": r["sagoDate"],
+                "lat": lat,
+                "lng": lng,
+            })
+
+        return JsonResponse(data, safe=False)
