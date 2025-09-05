@@ -2,7 +2,7 @@ import React from "react";
 import {useNavigate} from "react-router-dom";
 
 const NaviButton = ({label, start, goal, pathTo}) => {
-    const url = "http://192.168.0.146:8000";
+    const url = "http://10.97.30.236:8000";
     const navigate = useNavigate();
 
     const handleClick = async (event) => {
@@ -31,10 +31,8 @@ const NaviButton = ({label, start, goal, pathTo}) => {
     };
 
     return (
-        <button className="comp_button" onClick={handleClick}
-                style={{fontSize: "16px", borderRadius: "5px", border: "1px solid gray"}}>
-            <span>{label}</span>&nbsp;
-            <img src={`/media/right.png`} style={{width: "20px", marginBottom: "2px"}}/>
+        <button className="btn-primary-app" onClick={handleClick}>
+            <span>{label}</span>
         </button>
     );
 };

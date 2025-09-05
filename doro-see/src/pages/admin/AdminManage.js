@@ -3,18 +3,52 @@ import {Card, Table, Container, Row, Col, Dropdown} from "react-bootstrap";
 import {useLocation} from "react-router-dom";
 
 function AdminManage() {
-    const url = "http://192.168.0.146:8000";
+    const url = "http://10.97.30.236:8000";
     const location = useLocation();
-    const receivedData = location.state?.fetchedData || [];
+    const receivedData = location.state?.roadData || location.state?.fetchedData || [];
+    const [fetchedData, setFetchedData] = useState([]);
+    const [dataLoading, setDataLoading] = useState(true);
 
-    const filteredData = receivedData.filter(road => road.roadreport_image);
+    // 데이터가 없으면 API에서 직접 가져오기
+    useEffect(() => {
+        if (receivedData.length === 0) {
+            const fetchData = async () => {
+                try {
+                    const response = await fetch(`${url}/roadreport/all`, {
+                        method: "GET",
+                        headers: {'Content-Type': 'application/json'},
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        setFetchedData(data);
+                    }
+                } catch (error) {
+                    console.error("데이터 가져오기 실패:", error);
+                } finally {
+                    setDataLoading(false);
+                }
+            };
+            fetchData();
+        } else {
+            setFetchedData(receivedData);
+            setDataLoading(false);
+        }
+    }, [receivedData]);
+
+    const allRoadData = receivedData.length > 0 ? receivedData : fetchedData;
+    const filteredData = allRoadData.filter(road => road.roadreport_image);
 
     const naver = window.naver;
     const mapRef = useRef(null);
     const mapInstance = useRef(null);
 
-    const processedData = processRoadData(receivedData);
+    const processedData = processRoadData(allRoadData);
     const [road_manage, setRoadManage] = useState(processedData);
+
+    // 데이터가 변경되면 road_manage 업데이트
+    useEffect(() => {
+        setRoadManage(processRoadData(allRoadData));
+    }, [allRoadData]);
 
 
     function processRoadData(data) {
@@ -47,7 +81,11 @@ function AdminManage() {
         const matchDamage = selectedDamageFilter === "전체" || road.roadreport_damagetype.includes(selectedDamageFilter);
         const matchState = selectedStateFilter === "전체" || road.roadreport_status.includes(selectedStateFilter);
         const excludeResolved = selectedStateFilter === "전체" ? road.roadreport_status !== "해결됨" : matchState;
-        return road.roadreport_image && (road.roadreport_count >= 3) && excludeResolved && matchDamage && matchState;
+        return road.roadreport_image &&
+            excludeResolved &&
+            matchDamage &&
+            matchState
+            // && (road.roadreport_count >= 3);
     });
 
     const totalPages = Math.ceil(appliedfilterData.length / perPage);
@@ -230,31 +268,33 @@ function AdminManage() {
             },
         });
 
-        naver.maps.Event.once(map, "init", () => {
-            console.log("지도 초기화 완료");
-        });
-
         mapInstance.current = map;
 
-        appliedfilterData.forEach((road) => {
-            if (road.roadreport_latlng) {
-                const [lng, lat] = road.roadreport_latlng.split(",").map(coord => parseFloat(coord.trim()));
+        // init 이벤트 이후 Control과 마커 생성
+        naver.maps.Event.once(map, "init", () => {
+            console.log("NAVER Maps JavaScript API v3 초기화 완료 - AdminManage");
+            
+            // 마커 생성은 init 이후에 실행하도록 이동
+            appliedfilterData.forEach((road) => {
+                if (road.roadreport_latlng) {
+                    const [lng, lat] = road.roadreport_latlng.split(",").map(coord => parseFloat(coord.trim()));
 
-                const iconType = road.roadreport_damagetype.includes("pothole")
-                    ? "/media/icon_pothole.png"
-                    : "/media/icon_crack.png";
+                    const iconType = road.roadreport_damagetype.includes("pothole")
+                        ? "/media/icon_pothole.png"
+                        : "/media/icon_crack.png";
 
-                new naver.maps.Marker({
-                    position: new naver.maps.LatLng(lng, lat),
-                    map: map,
-                    icon: {
-                        url: iconType,
-                        size: new naver.maps.Size(32, 32),
-                        origin: new naver.maps.Point(0, 0),
-                        anchor: new naver.maps.Point(16, 16)
-                    }
-                });
-            }
+                    new naver.maps.Marker({
+                        position: new naver.maps.LatLng(lng, lat),
+                        map: map,
+                        icon: {
+                            url: iconType,
+                            size: new naver.maps.Size(32, 32),
+                            origin: new naver.maps.Point(0, 0),
+                            anchor: new naver.maps.Point(16, 16)
+                        }
+                    });
+                }
+            });
         });
     }, [filteredData]);
 
@@ -267,6 +307,20 @@ function AdminManage() {
         }
     }, [isLocationOpen, modalLocation]);
 
+
+    // 데이터 로딩 중일 때 표시
+    if (dataLoading) {
+        return (
+            <Container fluid>
+                <div style={{textAlign: "center", paddingTop: "100px"}}>
+                    <div className="spinner-border text-primary" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <div>데이터를 불러오는 중...</div>
+                </div>
+            </Container>
+        );
+    }
 
     return (
         <>

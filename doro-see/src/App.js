@@ -1,6 +1,7 @@
 import AdminData from "./pages/admin/AdminData.js";
 import AdminManage from "./pages/admin/AdminManage.js";
-import UserProfile from "./pages/users/UserProfile.js";
+import UserManage from "./pages/users/UserManage.js";
+import UserAuth from "./pages/users/UserAuth.js";
 import Direction from "./pages/navi/Direction";
 
 const user_id = sessionStorage.getItem(`user_id`)
@@ -36,16 +37,33 @@ const App = [
         layout: "/dorosee",
         endpoint: "roadreport/all"
     },
+    {
+        path: "/user/auth",
+        name: "로그인",
+        icon: "nc-icon nc-circle-09",
+        component: UserAuth,
+        layout: "/dorosee",
+        endpoint: ""
+    },
 
     // user
-    // {
-    //     path: "/user/info",
-    //     name: `회원이름`,
-    //     icon: "nc-icon nc-circle-09",
-    //     component: UserProfile,
-    //     layout: "/dorosee",
-    //     endpoint: `users/info/${user_id}/`
-    // },
+    {
+        path: "/user/info",
+        name: "내 신고 내역",
+        icon: "nc-icon nc-paper-2",
+        component: UserManage,
+        layout: "/dorosee",
+        endpoint: `roadreport/my`
+    },
+    {
+        path: "/user/logout",
+        name: "로그아웃",
+        icon: "nc-icon nc-button-power",
+        component: null,
+        layout: "/dorosee",
+        endpoint: "",
+        logout: true
+    },
 ];
 
 export default App;

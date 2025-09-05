@@ -2,14 +2,13 @@ import React from "react";
 import {useLocation, Route, Outlet} from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
+import MobileTabBar from "./MobileTabBar";
 import routes from "../../App.js";
 import sidebarImage from "../../assets/img/sidebar-3.jpg";
-import {useIsMapPage} from "../../pages/MapContext";
 
 function Layout() {
     // const [image, setImage] = React.useState(sidebarImage);
     const [color, setColor] = React.useState("black");
-    const isMap = useIsMapPage();
     const location = useLocation();
     const mainPanel = React.useRef(null);
 
@@ -18,7 +17,7 @@ function Layout() {
         "/dorosee/direction"
     ];
 
-    const isNoPadding = noPaddingPaths.includes(location.pathname);
+    const isMap = noPaddingPaths.includes(location.pathname);
 
     React.useEffect(() => {
         document.documentElement.scrollTop = 0;
@@ -35,17 +34,14 @@ function Layout() {
     }, [location]);
 
     return (
-        <div className="wrapper">
-            <Sidebar color={color} routes={routes}/>
-            <div
-                className={`main-panel ${isNoPadding ? "no-padding" : ""}`}
-                ref={mainPanel}
-            >
-                <Header/>
-                <div className="content">
+        <div className="app-shell">
+            <div className="app-content" ref={mainPanel}>
+                {!isMap && <Header/>}
+                <div className={`content ${isMap ? "no-padding" : ""}`}>
                     <Outlet/>
                 </div>
             </div>
+            <MobileTabBar/>
         </div>
     );
 }
