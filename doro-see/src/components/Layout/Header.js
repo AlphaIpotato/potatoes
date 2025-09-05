@@ -18,7 +18,9 @@ function Header() {
     };
 
     const showSearchBar = location.pathname.includes("direction");
-    const showLaPaControl = location.pathname.includes("admin");
+    const auth = (() => { try { return JSON.parse(localStorage.getItem("dorosee_auth")); } catch(_) { return null; } })();
+    const isAdmin = auth?.role === "admin";
+    const showLaPaControl = location.pathname.includes("admin") && isAdmin;
     const showUserData = sessionStorage.getItem('user_id');
 
     return (
@@ -44,7 +46,7 @@ function Header() {
                         {/* 프로필 드롭다운 */}
                         {showUserData === null ? (
                             <div>
-                                <Link to={`/dorosee/user/login`}>로그인</Link>
+                                {/*<Link to={`/dorosee/user/login`}>로그인</Link>*/}
 
                             </div>
                         ) : (

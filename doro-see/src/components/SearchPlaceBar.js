@@ -3,7 +3,7 @@ import React, {useState, useRef, useEffect} from "react";
 import NaviButton from "./NaviButton";
 
 const SearchPlaceBar = () => {
-    const url = "http://192.168.0.146:8000";
+    const url = "http://10.97.30.236:8000";
     const [inputStart, setInputStart] = useState("");
     const [inputGoal, setGoalInput] = useState("");
     const [searchPlace, setPlaceData] = useState([]);
@@ -102,12 +102,8 @@ const SearchPlaceBar = () => {
     };
 
     return (
-        <>
-            <div
-                id="search"
-                className="d-flex align-items-center"
-                style={{gap: "0.2vw"}}
-            >
+        <div className="nav-searchbar">
+            <div className="inputs">
                 <input
                     type="text"
                     id="search_start"
@@ -118,11 +114,6 @@ const SearchPlaceBar = () => {
                     onKeyDown={enterPlace}
                     onFocus={() => setActiveInput("start")}
                     ref={inputStartRef}
-                    style={{
-                        flex: 1,
-                        border: "1px solid gray",
-                        borderRadius: "5px"
-                    }}
                 />
 
                 <input
@@ -135,46 +126,38 @@ const SearchPlaceBar = () => {
                     onKeyDown={searchGoal}
                     onFocus={() => setActiveInput("goal")}
                     ref={inputGoalRef}
-                    style={{
-                        flex: 1,
-                        border: "1px solid gray",
-                        borderRadius: "5px"
-                    }}
                 />
 
                 <NaviButton
                     label="길찾기"
                     start={start}
                     goal={goal}
-                    path={`/dorosee/direction`}
+                    pathTo={`/dorosee/direction`}
                 />
             </div>
 
             {searchPlace.length > 0 && (
                 <div className="searchResult" style={{
-                    position: "absolute",
-                    top: "9%",
-                    left: "53%",
-                    width: "32%",
                     backgroundColor: "white",
-                    borderRadius: "0.5vh",
-                    zIndex: 1000
+                    borderRadius: "8px",
+                    zIndex: 1001
                 }}>
                     {searchPlace.map((road, index) => (
                         <div
                             className="perResult"
                             key={index}
                             onClick={() => handlePlaceClick(road)}
+                            style={{padding: "8px 10px", cursor: "pointer"}}
                         >
                             <p className="resultTitle"
-                               style={{margin: "0 0.2vw"}}>{road.title.replace(/<b>|<\/b>/g, '')}</p>
-                            <p className="resultAddress" style={{margin: "0.2vw 0.2vw"}}>{road.address}</p>
-                            <hr className="contour" style={{margin: "0.2vw"}}/>
+                               style={{margin: 0}}>{road.title.replace(/<b>|<\/b>/g, '')}</p>
+                            <p className="resultAddress" style={{margin: 0, color: "#666", fontSize: "12px"}}>{road.address}</p>
+                            <hr className="contour" style={{margin: "8px 0"}}/>
                         </div>
                     ))}
                 </div>
             )}
-        </>
+        </div>
     );
 };
 
