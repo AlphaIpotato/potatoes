@@ -3,7 +3,7 @@ import {useLocation, useNavigate, NavLink, Link} from "react-router-dom";
 import {Nav} from "react-bootstrap";
 
 function Sidebar({color, image, routes}) {
-    const url = "http://10.97.30.236:8000";
+    const url = "http://localhost:8000";
     const location = useLocation();
     const navigate = useNavigate();
     

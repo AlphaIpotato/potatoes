@@ -4,8 +4,8 @@ import {MapContext} from './MapContext';
 import '../assets/styles/DamageMap.css';
 
 function DamageMap() {
-    const url = "http://10.97.30.236:8000";
-    const url2 = "http://10.97.30.236:8002";
+    const url = "http://localhost:8000";
+    const url2 = "http://localhost:8002";
 
     if (!window.naver) return null;
     const {naver} = window;

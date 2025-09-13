@@ -8,7 +8,6 @@ import {
     Col,
     Button,
 } from "react-bootstrap";
-// import {Fab} from "@mui/material"; // @mui/material 패키지가 설치되지 않아서 주석 처리
 
 // Error Boundary 컴포넌트
 class AdminDataErrorBoundary extends React.Component {
@@ -48,7 +47,7 @@ class AdminDataErrorBoundary extends React.Component {
 
 function AdminData() {
     const location = useLocation();
-    const url = "http://10.97.30.236:8000";
+    const url = "http://localhost:8000";
     
     // location.state에서 데이터를 가져오거나, 직접 API에서 가져오기
     const road_data = location.state?.roadData || location.state?.fetchedData || [];

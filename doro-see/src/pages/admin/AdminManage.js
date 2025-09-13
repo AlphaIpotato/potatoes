@@ -3,7 +3,7 @@ import {Card, Table, Container, Row, Col, Dropdown} from "react-bootstrap";
 import {useLocation} from "react-router-dom";
 
 function AdminManage() {
-    const url = "http://10.97.30.236:8000";
+    const url = "http://localhost:8000";
     const location = useLocation();
     const receivedData = location.state?.roadData || location.state?.fetchedData || [];
     const [fetchedData, setFetchedData] = useState([]);
@@ -86,6 +86,11 @@ function AdminManage() {
             matchDamage &&
             matchState
             // && (road.roadreport_count >= 3);
+    }).sort((a, b) => {
+        // 최신순으로 정렬 (roadreport_time 기준)
+        const timeA = new Date(a.roadreport_time || 0);
+        const timeB = new Date(b.roadreport_time || 0);
+        return timeB - timeA; // 내림차순 (최신이 먼저)
     });
 
     const totalPages = Math.ceil(appliedfilterData.length / perPage);
