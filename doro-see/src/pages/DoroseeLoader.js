@@ -2,7 +2,7 @@ import React, {useEffect} from 'react';
 import {useNavigate} from 'react-router-dom';
 
 function DoroseeLoader() {
-    const url = "http://localhost:8000";
+    const url = "http://10.120.193.236:8000";
     const navigate = useNavigate();
 
     useEffect(() => {

@@ -3,8 +3,11 @@ import React, {useState} from 'react';
 const PiServerControl = () => {
     const [isOn, setIsOn] = useState(false);
 
-    const piServerControlUrl = 'http://192.168.0.135:5000/control';
-    const fallbackUrl = 'http://10.56.194.194:5000/control';
+    const piServerControlUrl = 'http://10.120.193.194:5000/control';
+
+    // const fallbackUrl = 'http://192.168.0.135:5000/control';
+    // const fallbackUrl = 'http://10.56.194.194:5000/control';
+    const fallbackUrl = 'http://10.120.193.194:5000/control';
 
     async function sendControlCommand(command, piServerControlUrl) {
         console.log(`Sending command: '${command}' to ${piServerControlUrl}`);

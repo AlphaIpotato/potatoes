@@ -3,7 +3,7 @@ import {Card, Container, Row, Col, Form, Button, Alert, Spinner} from "react-boo
 import {Link, useNavigate} from "react-router-dom";
 
 function UserLogin({ embedded = false }) {
-    const apiBase = "http://localhost:8000";
+    const apiBase = "http://10.120.193.236:8000";
     const navigate = useNavigate();
 
     const [mode, setMode] = useState("user"); // 'user' | 'admin'
