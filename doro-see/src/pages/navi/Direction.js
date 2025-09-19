@@ -80,13 +80,13 @@ function Direction() {
         const fetchAllData = async () => {
             try {
                 const [damageResponse, subsidenceResponse, ggSubsidenceResponse] = await Promise.all([
-                    fetch('http://localhost:8000/roadreport/all', {
+                    fetch('http://10.120.193.236:8000/roadreport/all', {
                         headers: {'Content-Type': 'application/json'}
                     }),
-                    fetch('http://localhost:8000/api/subsidence/coords/', {
+                    fetch('http://10.120.193.236:8000/api/subsidence/coords/', {
                         headers: {'Content-Type': 'application/json'}
                     }),
-                    fetch('http://localhost:8000/gg/subsidence/', {
+                    fetch('http://10.120.193.236:8000/gg/subsidence/', {
                     headers: {'Content-Type': 'application/json'}
                     })
                 ]);

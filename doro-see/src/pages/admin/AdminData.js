@@ -47,7 +47,7 @@ class AdminDataErrorBoundary extends React.Component {
 
 function AdminData() {
     const location = useLocation();
-    const url = "http://localhost:8000";
+    const url = "http://10.120.193.236:8000";
     
     // location.state에서 데이터를 가져오거나, 직접 API에서 가져오기
     const road_data = location.state?.roadData || location.state?.fetchedData || [];
@@ -828,8 +828,8 @@ function AdminData() {
                                         <tr>
                                             <th>지역</th>
                                             <th>도로파손</th>
-                                            <th>지반침하 의심</th>
-                                            <th>지하안전정보</th>
+                                            <th>경기데이터드림</th>
+                                            <th>공공데이터포털</th>
                                             <th>총계</th>
                                         </tr>
                                         </thead>
@@ -880,8 +880,8 @@ function AdminData() {
                                 </div>
                                 <div style={{marginTop: "15px", fontSize: "14px", color: "#666"}}>
                                     <i className="fas fa-circle text-success"></i> 도로파손 (roadreport) &nbsp;
-                                    <i className="fas fa-circle text-danger"></i> 지반침하 의심 (ggdata) &nbsp;
-                                    <i className="fas fa-circle text-info"></i> 지하안전정보 (ssdata)
+                                    <i className="fas fa-circle text-danger"></i> 지반침하 의심 (경기데이터드림) &nbsp;
+                                    <i className="fas fa-circle text-info"></i> 지하안전정보 (공공데이터포털)
                                 </div>
                             </Card.Body>
                         </Card>

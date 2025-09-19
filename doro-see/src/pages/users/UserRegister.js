@@ -3,7 +3,7 @@ import {Card, Container, Row, Col, Form, Button, Alert, Spinner} from "react-boo
 import {useNavigate} from "react-router-dom";
 
 function UserRegister({ embedded = false }) {
-    const apiBase = "http://localhost:8000";
+    const apiBase = "http://10.120.193.236:8000";
     const navigate = useNavigate();
     const [role, setRole] = useState("user"); // 'user' | 'admin'
     const [form, setForm] = useState({

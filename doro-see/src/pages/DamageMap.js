@@ -4,8 +4,8 @@ import {MapContext} from './MapContext';
 import '../assets/styles/DamageMap.css';
 
 function DamageMap() {
-    const url = "http://localhost:8000";
-    const url2 = "http://localhost:8002";
+    const url = "http://10.120.193.236:8000";
+    const url2 = "http://10.120.193.236:8002";
 
     if (!window.naver) return null;
     const {naver} = window;
@@ -317,7 +317,7 @@ function DamageMap() {
                 
                 const infoHtml = `
                     <div style="font-size:12px; line-height:1.4; padding:6px 8px; max-width: 220px;">
-                        <div style="font-weight:700; margin-bottom:2px;">지반침하 의심</div>
+                        <div style="font-weight:700; margin-bottom:2px;">지반침하 의심 (경기데이터드림)</div>
                         <div style="color:#555;">${address}</div>
                         <div>위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}</div>
                         ${item.sagoNo ? `<div style="color:#888; font-size:10px; margin-top:2px;">사고번호: ${item.sagoNo}</div>` : ''}
@@ -363,7 +363,7 @@ function DamageMap() {
                     anchor: new naver.maps.Point(12, 12)
                 }
             });
-            const label = item?.name || item?.title || '지하안전정보';
+            const label = item?.name || item?.title || '지하안전정보 (공공데이터포털)';
             const infoHtml = `
                 <div style="font-size:12px; line-height:1.4; padding:6px 8px; max-width: 240px;">
                     <div style="font-weight:700; margin-bottom:2px;">${label}</div>

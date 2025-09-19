@@ -3,7 +3,7 @@ import React, {useState, useRef, useEffect} from "react";
 import NaviButton from "./NaviButton";
 
 const SearchPlaceBar = () => {
-    const url = "http://localhost:8000";
+    const url = "http://10.120.193.236:8000";
     const [inputStart, setInputStart] = useState("");
     const [inputGoal, setGoalInput] = useState("");
     const [searchPlace, setPlaceData] = useState([]);
